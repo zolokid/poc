@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build step
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v2
+    - name: Build container image
+      uses: docker/build-push-action@v1
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        repository: warapongpj/app
+        tags: ${{ github.sha }}, dev
+  deploy:
+    needs: [build]
+    runs-on: ubuntu-latest
+    name: Deploy step
+    steps:
+    - name: Setup remote manage node
+      env:
+        PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
+        echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        chmod 400 ~/.ssh/id_rsa
+    - name: Deploy application
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+        HOSTNAME: ${{ secrets.SSH_HOSTNAME }}
+        USERNAME: ${{ secrets.SSH_USERNAME }}
+      run: |
+        ssh $USERNAME@$HOSTNAME "docker run -itd --name app -p 80:80 warapongpj/app:$IMAGE_TAG"
